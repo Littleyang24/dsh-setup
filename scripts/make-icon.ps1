@@ -1,9 +1,12 @@
-# make-icon.ps1 - generate D:\DSH\assets\dsh.ico (256x256 PNG-compressed ICO)
+# make-icon.ps1 - generate <RepoRoot>\assets\dsh.ico (256x256 PNG-compressed ICO)
 # ASCII-only on purpose: this script may be parsed by Windows PowerShell 5.1
 # under a non-UTF8 system code page, where multi-byte comments can break parsing.
+param(
+    [string]$RepoRoot = (Split-Path $PSScriptRoot -Parent)
+)
 Add-Type -AssemblyName System.Drawing
 
-$outDir = 'D:\DSH\assets'
+$outDir = Join-Path $RepoRoot 'assets'
 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 $pngPath = Join-Path $outDir 'dsh-icon.png'
 $icoPath = Join-Path $outDir 'dsh.ico'

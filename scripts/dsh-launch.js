@@ -1,16 +1,18 @@
 // dsh-launch.js - start the DSH web server (hidden, no console window) and
 // open the GUI in the default browser once the server really responds.
-// ASCII-only on purpose (consistency with the other launcher files).
+// Portable: all paths are derived at runtime (repo root from this file's own
+// location, node from process.execPath, dsh install discovered via npm prefix
+// / PATH / npx cache), so the same script works on any Windows PC after a
+// `git clone` + scripts/deploy.ps1.
 //
 // Modes:
 //   default        ensure server running (start hidden if needed), wait until
 //                  it responds over HTTP, then open the browser. Used by the
 //                  desktop and start-menu shortcuts.
 //   --server-only  ensure server running, never open the browser. Used by the
-//                  logon scheduled task.
+//                  logon Run-key entry.
 //   --open-only    never start the server; wait until it is up, then open the
-//                  browser. Used by the startup-folder shortcut (the task
-//                  starts the server; this only opens the browser).
+//                  browser. Used by the startup-folder shortcut.
 //   --port=NNNN    listen port override (testing only).
 'use strict';
 
@@ -18,16 +20,14 @@ const { spawn, exec } = require('node:child_process');
 const net = require('node:net');
 const fs = require('node:fs');
 const path = require('node:path');
+const os = require('node:os');
 
 const DEFAULT_PORT = 3080;
-const WORKDIR = 'D:\\DSH';
-const LOG_DIR = path.join(WORKDIR, 'logs');
+const REPO_ROOT = path.resolve(__dirname, '..'); // ...\scripts -> repo root
+const LOG_DIR = path.join(REPO_ROOT, 'logs');
 const LOG_FILE = path.join(LOG_DIR, 'dsh-launch.log');
-const NODE_EXE = 'D:\\Program Files\\nodejs\\node.exe';
-const GLOBAL_BIN = 'C:\\Users\\xiaoy\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js';
-const NPX_BIN = 'C:\\Users\\xiaoy\\AppData\\Local\\npm-cache\\_npx\\1e7f6d9597241db0\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js';
-// V8 module compile cache: speeds up the next cold starts of dsh.
-const COMPILE_CACHE_DIR = 'C:\\Users\\xiaoy\\.dsh\\node-compile-cache';
+const NODE_EXE = process.execPath; // the node interpreter running this script
+const COMPILE_CACHE_DIR = path.join(os.homedir(), '.dsh', 'node-compile-cache');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -84,9 +84,30 @@ function httpReady(port, timeoutMs) {
   });
 }
 
+// Locate the dsh CLI entry (lib/bin.js) installed on this machine.
+// Order: npm user prefix -> dsh shims on PATH -> npx cache folders.
 function resolveBin() {
-  for (const p of [GLOBAL_BIN, NPX_BIN]) {
-    try { fs.accessSync(p); return p; } catch (e) { /* try next */ }
+  const candidates = [];
+  if (process.env.APPDATA) {
+    candidates.push(path.join(process.env.APPDATA, 'npm', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+  }
+  for (const dir of (process.env.PATH || '').split(';')) {
+    if (!dir) continue;
+    for (const shim of ['dsh.cmd', 'dsh']) {
+      const shimPath = path.join(dir, shim);
+      try { if (fs.statSync(shimPath).isFile()) candidates.push(path.join(dir, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')); } catch (e) { /* try next */ }
+    }
+  }
+  if (process.env.LOCALAPPDATA) {
+    const npxRoot = path.join(process.env.LOCALAPPDATA, 'npm-cache', '_npx');
+    try {
+      for (const entry of fs.readdirSync(npxRoot)) {
+        candidates.push(path.join(npxRoot, entry, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+      }
+    } catch (e) { /* no npx cache yet */ }
+  }
+  for (const p of candidates) {
+    try { if (fs.statSync(p).isFile()) return p; } catch (e) { /* try next */ }
   }
   return null;
 }
@@ -94,7 +115,7 @@ function resolveBin() {
 function spawnServer(port) {
   const bin = resolveBin();
   if (!bin) {
-    log('dsh-launch: ERROR no dsh bin.js found (checked global and npx cache)');
+    log('dsh-launch: ERROR no dsh bin.js found - run scripts/deploy.ps1 or npm install -g @deepseek-ai/dsh');
     return null;
   }
   const args = [bin, '--profile', 'web', '--no-open'];
@@ -107,7 +128,7 @@ function spawnServer(port) {
     errFd = fs.openSync(path.join(LOG_DIR, 'dsh-server.err.log'), 'a');
   } catch (e) { /* logs optional */ }
   const child = spawn(NODE_EXE, args, {
-    cwd: WORKDIR,
+    cwd: REPO_ROOT,
     detached: true,
     windowsHide: true,
     stdio: ['ignore', outFd, errFd],
@@ -142,7 +163,7 @@ async function main() {
   const port = portArg ? Number(portArg.split('=')[1]) : DEFAULT_PORT;
   const url = 'http://127.0.0.1:' + port;
 
-  log('dsh-launch: start (port=' + port + ' serverOnly=' + serverOnly + ' openOnly=' + openOnly + ')');
+  log('dsh-launch: start (port=' + port + ' serverOnly=' + serverOnly + ' openOnly=' + openOnly + ' repo=' + REPO_ROOT + ')');
 
   if (await portOpen(port)) {
     log('dsh-launch: server already running on port ' + port);

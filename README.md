@@ -7,11 +7,12 @@
 ```
 D:\DSH
 ├── scripts/                         # 启动与配置脚本
-│   ├── dsh-launch.js                # Node.js 启动器（当前生效）
-│   ├── dsh-launch.vbs               # 隐藏窗口包装（wscript 调用）
+│   ├── dsh-launch.js                # Node.js 启动器（动态路径，跨机器可用）
+│   ├── dsh-launch.vbs               # 隐藏窗口包装（wscript 调用，动态路径）
+│   ├── deploy.ps1                   # ★ 新电脑一键部署脚本
+│   ├── make-shortcuts.ps1           # 生成三个快捷方式的脚本（-RepoRoot 参数）
+│   ├── make-icon.ps1                # 生成快捷方式图标的脚本（-RepoRoot 参数）
 │   ├── dsh-launch.ps1               # 旧的 PowerShell 启动器（已弃用，保留参考）
-│   ├── make-shortcuts.ps1           # 生成三个快捷方式的脚本
-│   ├── make-icon.ps1                # 生成快捷方式图标的脚本
 │   └── enable-defender-exclusions.ps1  # 管理员运行：添加 Defender 排除项
 ├── assets/
 │   ├── dsh.ico                      # 快捷方式图标
@@ -38,6 +39,29 @@ D:\DSH
 | `--open-only` | 不启动服务，等就绪后开浏览器（超时回退自启） | 开机启动文件夹 |
 
 日志：`logs/dsh-launch.log`（启动器，毫秒级时间戳）；`logs/dsh-server.out.log`、`logs/dsh-server.err.log`（DSH 服务输出）。
+
+## 部署到新电脑（git clone 一键配置）
+
+所有脚本均使用**动态路径**（从自身位置推导仓库根目录、从 PATH 解析 node、自动发现 dsh 安装位置），因此 clone 到任意目录、任意用户名的机器都能直接工作。
+
+```powershell
+# 1. 新电脑安装 Node.js LTS：https://nodejs.org
+# 2. 克隆仓库（SSH 或 HTTPS 均可）
+git clone git@github.com:Littleyang24/dsh-setup.git
+# 3. 一键部署
+cd dsh-setup
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\deploy.ps1
+```
+
+`deploy.ps1` 会自动完成：
+
+1. 定位 Node.js，缺失则报错并提示安装；已安装则确保其目录在用户 PATH 中
+2. 检测 `@deepseek-ai/dsh` 全局安装，缺失时自动 `npm install -g`（可用 `-InstallDsh` 强制重装）
+3. 写入注册表 Run 键 `DSH Server`（登录即后台启动服务）
+4. 生成快捷方式图标并创建三个快捷方式（启动文件夹 / 桌面 / 开始菜单）
+5. （可选）`-DefenderExclusions`：以管理员身份添加 Defender 排除项，消除冷启动扫描延迟
+
+部署完成后注销/重启一次即可：登录后浏览器自动打开 `http://127.0.0.1:3080`。
 
 ## 提速说明
 

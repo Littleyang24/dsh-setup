@@ -4,11 +4,14 @@
 #   3. Start menu      : Programs\DSH\DSH.lnk
 # All three point to wscript.exe + dsh-launch.vbs (hidden window, no console flash).
 # ASCII-only on purpose: parsed by Windows PowerShell 5.1 under a non-UTF8 code page.
+param(
+    [string]$RepoRoot = (Split-Path $PSScriptRoot -Parent)
+)
 $ErrorActionPreference = 'Stop'
 
 $ws = New-Object -ComObject WScript.Shell
-$icon = 'D:\DSH\assets\dsh.ico,0'
-$vbs = '"D:\DSH\scripts\dsh-launch.vbs"'
+$icon = (Join-Path $RepoRoot 'assets\dsh.ico') + ',0'
+$vbs = '"' + (Join-Path $RepoRoot 'scripts\dsh-launch.vbs') + '"'
 
 function New-DshShortcut {
     param([string]$Path, [string]$Name, [string]$Desc)
@@ -16,7 +19,7 @@ function New-DshShortcut {
     $sc = $ws.CreateShortcut($lnkPath)
     $sc.TargetPath = Join-Path $env:WINDIR 'System32\wscript.exe'
     $sc.Arguments = $vbs
-    $sc.WorkingDirectory = 'D:\DSH'
+    $sc.WorkingDirectory = $RepoRoot
     $sc.IconLocation = $icon
     $sc.Description = $Desc
     $sc.Save()
