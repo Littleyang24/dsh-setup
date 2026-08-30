@@ -1,0 +1,10 @@
+# runtime logs
+logs/
+*.log
+
+# node artifacts
+node_modules/
+
+# temporary setup files
+download-git.js
+.git-setup/
